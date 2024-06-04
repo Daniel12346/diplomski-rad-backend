@@ -1,11 +1,11 @@
 const express = require("express");
 const faceapi = require("face-api.js");
 const mongoose = require("mongoose");
-const { Canvas, Image } = require("canvas");
 const canvas = require("canvas");
 const fileUpload = require("express-fileupload");
 const cors = require("cors");
 require("dotenv").config();
+const { Canvas, Image } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image });
 
 const app = express();
@@ -105,10 +105,11 @@ async function getDescriptorsFromDB(image) {
     .withFaceLandmarks()
     .withFaceDescriptors();
   const resizedDetections = faceapi.resizeResults(detections, displaySize);
+  faceapi.draw.drawDetections(temp, resizedDetections);
   const results = resizedDetections.map((d) =>
     faceMatcher.findBestMatch(d.descriptor)
   );
-  return results;
+  return { matchResults: results, resizedDetections, canvas: temp };
 }
 
 app.post("/post-face", async (req, res) => {
@@ -125,9 +126,15 @@ app.post("/post-face", async (req, res) => {
 });
 
 app.post("/check-face", async (req, res) => {
-  const image = req.files.image.tempFilePath;
-  let result = await getDescriptorsFromDB(image);
-  res.json({ result });
+  const imagePath = req.files.image.tempFilePath;
+  let { matchResults, resizedDetections, canvas } = await getDescriptorsFromDB(
+    imagePath
+  );
+  res.json({
+    matchResults,
+    resizedDetections,
+    boundingBoxOverlaySrc: canvas.toDataURL(),
+  });
 });
 
 // add your mongo key instead of the ***
