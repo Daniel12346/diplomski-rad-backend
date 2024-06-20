@@ -2,20 +2,17 @@ const express = require("express");
 const faceapi = require("face-api.js");
 const mongoose = require("mongoose");
 const canvas = require("canvas");
-const fileUpload = require("express-fileupload");
 const cors = require("cors");
+const { getJson } = require("serpapi");
+const { url } = require("inspector");
 require("dotenv").config();
 const { Canvas, Image } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image });
 
 const app = express();
 
+app.use(express.json());
 app.use(cors());
-app.use(
-  fileUpload({
-    useTempFiles: true,
-  })
-);
 
 async function LoadModels() {
   // Load the models
@@ -39,6 +36,30 @@ const faceSchema = new mongoose.Schema({
 });
 
 const FaceModel = mongoose.model("Face", faceSchema);
+
+const imageCheckResultSchema = new mongoose.Schema({
+  imageUrl: {
+    type: String,
+    required: true,
+  },
+  socialMediaName: {
+    type: String,
+    required: true,
+  },
+  recognizedFace: {
+    type: String,
+    required: true,
+  },
+  result: {
+    // REAL, FAKE, UNKNOWN
+    type: String,
+  },
+});
+
+const ImageCheckResultModel = mongoose.model(
+  "ImageCheckResult",
+  imageCheckResultSchema
+);
 
 async function uploadLabeledImages(images, label) {
   try {
@@ -126,10 +147,15 @@ app.post("/post-face", async (req, res) => {
 });
 
 app.post("/check-face", async (req, res) => {
-  const imagePath = req.files.image.tempFilePath;
+  const imagePath = req.body.imageSrc;
+  console.log(imagePath);
+  if (!imagePath) {
+    return new Error("Image URL not provided");
+  }
   let { matchResults, resizedDetections, canvas } = await getDescriptorsFromDB(
     imagePath
   );
+  console.log(matchResults);
   res.json({
     matchResults,
     resizedDetections,
@@ -137,7 +163,57 @@ app.post("/check-face", async (req, res) => {
   });
 });
 
-// add your mongo key instead of the ***
+app.post("/find-related", async (req, res) => {
+  const imagePath = req.body.imageSrc;
+  if (!imagePath) {
+    return new Error("Image URL not provided");
+  }
+  const response = await getJson("google_reverse_image", {
+    api_key: process.env.SERPAPI_KEY,
+    image_url: imagePath,
+  });
+  console.log(response);
+  res.json(response);
+});
+
+app.post("/save-result-data", async (req, res) => {
+  const { imageUrl, socialMediaName, recognizedFace, result } = req.body;
+  const newImageCheckResult = new ImageCheckResultModel({
+    imageUrl,
+    socialMediaName,
+    recognizedFace,
+    result,
+  });
+  await newImageCheckResult.save();
+  res.json({ message: "Data saved successfully" });
+});
+
+app.get("/validity-stats", async (req, res) => {
+  const totalImages = await ImageCheckResultModel.countDocuments();
+  const realImages = await ImageCheckResultModel.countDocuments({
+    result: "REAL",
+  });
+  const fakeImages = await ImageCheckResultModel.countDocuments({
+    result: "FAKE",
+  });
+  const unknownImages = await ImageCheckResultModel.countDocuments({
+    result: "UNKNOWN",
+  });
+  res.json({ totalImages, realImages, fakeImages, unknownImages });
+});
+
+app.get("/social-media-stats", async (req, res) => {
+  const socialMediaStats = await ImageCheckResultModel.aggregate([
+    {
+      $group: {
+        _id: "$socialMediaName",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+  res.json(socialMediaStats);
+});
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
