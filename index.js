@@ -1,11 +1,13 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const { getJson } = require("serpapi");
-require("dotenv").config();
-const fileupload = require("express-fileupload");
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import { getJson } from "serpapi";
+import dotenv from "dotenv";
+import fileupload from "express-fileupload";
 
+dotenv.config();
 const app = express();
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(fileupload({ useTempFiles: true }));
