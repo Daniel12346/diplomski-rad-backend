@@ -53,18 +53,21 @@ const ImageCheckResultModel = mongoose.model(
 
 app.post("/upload-image", async (req, res) => {
   const { imagePath } = req.body;
-  let image = null;
-  if (req.files) {
-    image = req.files.image;
-  }
-  const path = imagePath || image.tempFilePath;
+  // let image = null;
+  // console.log(req.files, req.body);
+  // if (req.files) {
+  //   image = req.files.image;
+  // }
+  const path = imagePath;
   if (!path) {
     return res.status(400).json({ message: "Image path not provided" });
   }
   try {
     const cloudinaryResponse = await v2.uploader.upload(path);
-    res.json(cloudinaryResponse);
+    console.log(cloudinaryResponse);
+    res.status(200).json(cloudinaryResponse);
   } catch (err) {
+    console.log(err);
     //send error message
     res.status(500).json({ message: "Error uploading image" });
   }
@@ -79,7 +82,7 @@ app.post("/find-related", async (req, res) => {
     api_key: process.env.SERPAPI_KEY,
     image_url: imagePath,
   });
-  res.send(200).json(response);
+  res.status(200).json(response);
 });
 //--------------------
 
